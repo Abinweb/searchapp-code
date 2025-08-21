@@ -53,6 +53,19 @@ async function getVisitorSessionToken() {
     }
 }
 
+// Font weight helper function
+function fontWeightFromClass(className) {
+    switch (className) {
+        case "font-light": return 300;
+        case "font-normal": return 400;
+        case "font-medium": return 500;
+        case "font-semibold": return 600;
+        case "font-bold": return 700;
+        case "font-extrabold": return 800;
+        default: return 400;
+    }
+}
+
 // Render search results with pagination
 function renderResults(results, title, displayMode, maxItems, gridColumns = 3, paginationType = "None", container, currentPage = 1, isPageResult = true, styles = {}) {
     
@@ -66,20 +79,22 @@ function renderResults(results, title, displayMode, maxItems, gridColumns = 3, p
         titleFontSize = "16px",
         titleFontFamily = "Arial",
         titleColor = "#000",
+        titleFontWeight = "font-bold",
         borderRadius = "6px",
         otherFieldsColor = "#333",
         otherFieldsFontSize = "14px",
-         boxShadow = true,
+        otherFieldsFontFamily = "Arial",
+        otherFieldsFontWeight = "font-normal",
+        backgroundColor = "#fff",
+        boxShadow = true,
+        headingAlignment = "left",
+        bodyAlignment = "left",
     } = styles;
 
     
     const itemsHtml = pagedResults.map(item => {
   const titleText = item.name || item.title || "Untitled";
-  //const detailUrl = isPageResult
-   // ? (item.publishedPath || item.slug || "#")
-    //: (item.detailUrl || "#");
-
-const detailUrl = item._type === 'page'
+  const detailUrl = item._type === 'page'
   ? (item.publishedPath || item.slug || "#")
   : (item.detailUrl || "#");
   const matchedText = item.matchedText?.slice(0, 200) || "";
@@ -100,19 +115,19 @@ const detailUrl = item._type === 'page'
             ? 'max-width: 100%;'
             : 'max-width: 50%;';
 
-          return `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize};">
+          return `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize}; font-family: ${otherFieldsFontFamily}; font-weight: ${fontWeightFromClass(otherFieldsFontWeight)}; text-align: ${bodyAlignment};">
                     <img src="${imageUrl}" alt="${key}" class="item-image" style="${imageStyle} border-radius: 4px;" />
                   </p>`;
         }
 
-        return `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize};">${JSON.stringify(value)}</p>`;
+        return `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize}; font-family: ${otherFieldsFontFamily}; font-weight: ${fontWeightFromClass(otherFieldsFontWeight)}; text-align: ${bodyAlignment};">${JSON.stringify(value)}</p>`;
       }
 
-      return `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize};">${value}</p>`;
+      return `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize}; font-family: ${otherFieldsFontFamily}; font-weight: ${fontWeightFromClass(otherFieldsFontWeight)}; text-align: ${bodyAlignment};">${value}</p>`;
     })
     .join("");
 
-  const boxShadowStyle = boxShadow ? "0 2px 6px rgba(255, 0, 0, 0.4)" : "none";
+  const boxShadowStyle = boxShadow ? "0 2px 6px rgba(0, 0, 0, 0.1)" : "none";
 
   if (displayMode === "Grid") {
     //  Grid: whole card is clickable
@@ -120,18 +135,18 @@ const detailUrl = item._type === 'page'
       <a href="${detailUrl}" target="_blank" style="text-decoration: none; color: inherit;">
         <div class="search-result-item" 
           style="
-            background: #fff;
+            background: ${backgroundColor};
             border: 1px solid #ddd;
             border-radius: ${borderRadius};
             padding: 1rem;
             margin-bottom: 1rem;
             box-shadow: ${boxShadowStyle};
           ">
-          <h4 style="font-size: ${titleFontSize}; font-family: ${titleFontFamily}; color: ${titleColor}; margin-bottom: 0.5rem;">
+          <h4 style="font-size: ${titleFontSize}; font-family: ${titleFontFamily}; font-weight: ${fontWeightFromClass(titleFontWeight)}; color: ${titleColor}; text-align: ${headingAlignment}; margin-bottom: 0.5rem;">
             ${titleText}
           </h4>
           ${matchedText
-            ? `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize};">${matchedText}...</p>`
+            ? `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize}; font-family: ${otherFieldsFontFamily}; font-weight: ${fontWeightFromClass(otherFieldsFontWeight)}; text-align: ${bodyAlignment};">${matchedText}...</p>`
             : fieldsHtml}
         </div>
       </a>
@@ -140,11 +155,11 @@ const detailUrl = item._type === 'page'
     //  List: no card, only title is clickable
     return `
       <div class="search-result-item" style="margin-bottom: 1rem; padding-left: 1rem;">
-        <a href="${detailUrl}" target="_blank" style="font-size: ${titleFontSize}; font-family: ${titleFontFamily}; color: ${titleColor}; font-weight: bold; text-decoration: underline;">
+        <a href="${detailUrl}" target="_blank" style="font-size: ${titleFontSize}; font-family: ${titleFontFamily}; font-weight: ${fontWeightFromClass(titleFontWeight)}; color: ${titleColor}; text-align: ${headingAlignment}; text-decoration: underline;">
           ${titleText}
         </a>
         ${matchedText
-          ? `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize};">${matchedText}...</p>`
+          ? `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize}; font-family: ${otherFieldsFontFamily}; font-weight: ${fontWeightFromClass(otherFieldsFontWeight)}; text-align: ${bodyAlignment};">${matchedText}...</p>`
           : fieldsHtml}
       </div>
     `;
@@ -226,6 +241,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     const resultPage = searchConfigDiv.getAttribute('data-result-page') || "Same page";
     const shouldOpenInNewPage = resultPage === "New Page";
 
+    // Original styling properties
     const titleFontSize = searchConfigDiv.getAttribute("data-title-font-size") || "16px";
     const titleFontFamily = searchConfigDiv.getAttribute("data-title-font-family") || "Arial";
     const titleColor = searchConfigDiv.getAttribute("data-title-color") || "#000";
@@ -233,6 +249,14 @@ document.addEventListener("DOMContentLoaded", async function () {
     const otherFieldsFontSize = searchConfigDiv.getAttribute("data-other-fields-font-size") || "14px";
     const borderRadius = searchConfigDiv.getAttribute("data-border-radius") || "6px";
     const boxShadow = searchConfigDiv.getAttribute("data-box-shadow") === "true";
+
+    // NEW: Additional styling properties
+    const titleFontWeight = searchConfigDiv.getAttribute("data-title-font-weight") || "font-bold";
+    const otherFieldsFontFamily = searchConfigDiv.getAttribute("data-other-fields-font-family") || "Arial";
+    const otherFieldsFontWeight = searchConfigDiv.getAttribute("data-other-font-weight") || "font-normal";
+    const backgroundColor = searchConfigDiv.getAttribute("data-background-color") || "#fff";
+    const headingAlignment = searchConfigDiv.getAttribute("data-heading-alignment") || "left";
+    const bodyAlignment = searchConfigDiv.getAttribute("data-body-alignment") || "left";
 
     const maxItems = displayMode === "Grid" ? gridRows * gridColumns : itemsPerPage;
     const collectionsParam = encodeURIComponent(JSON.stringify(selectedCollections));
@@ -244,10 +268,16 @@ document.addEventListener("DOMContentLoaded", async function () {
       titleFontSize,
       titleFontFamily,
       titleColor,
+      titleFontWeight,
       otherFieldsColor,
       otherFieldsFontSize,
+      otherFieldsFontFamily,
+      otherFieldsFontWeight,
       borderRadius,
-         boxShadow,
+      backgroundColor,
+      boxShadow,
+      headingAlignment,
+      bodyAlignment,
     };
 
  
@@ -570,7 +600,7 @@ async function performSearch() {
          //   debounceTimeout = setTimeout(() => {
            //     performSearch();
            // }, 300); // 300ms debounce
-       // });
+       // }
     
         
         form.addEventListener("submit", (e) => {
