@@ -560,8 +560,13 @@ async function performSearch() {
         }
 
         if (allResults.length === 0) {
+               // hide spinner
+            const spinner = document.getElementById("search-spinner");
+            if (spinner) spinner.style.display = "none";
+
+            // show message
             resultsContainer.innerHTML = "<p>No results found.</p>";
-            return;
+             return;
         }
 
         // Optional: Sort combined results if needed, e.g., by a relevance score or date
