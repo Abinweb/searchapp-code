@@ -183,11 +183,22 @@ function renderResults(results, title, displayMode, maxItems, gridColumns = 3, p
     const sectionHtml = `
         <section style="margin-top: 2rem;">
             
-            <div class="search-results-wrapper" style="
-  display: ${displayMode === 'Grid' ? 'grid' : 'block'};
+            <div class="search-results-wrapper"
+     style="display: ${displayMode === 'Grid' ? 'grid' : 'block'}; gap: 1rem;">
+</div>
+
+<style>
+.search-results-wrapper {
   grid-template-columns: repeat(${gridColumns}, 1fr);
-  gap: 1rem;
-">
+}
+
+/* ✅ Responsive override */
+@media (max-width: 675px) {
+  .search-results-wrapper {
+    grid-template-columns: repeat(1, 1fr) !important;
+  }
+}
+</style>
 
                 ${itemsHtml}
             </div>
