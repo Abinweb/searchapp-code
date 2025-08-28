@@ -180,11 +180,12 @@ function renderResults(results, title, displayMode, maxItems, gridColumns = 3, p
         paginationHtml += `<div style="text-align:center;"><button class="load-more-button" style="margin-top:1rem;">Load More</button></div>`;
     }
 
-    const sectionHtml = `
+ const sectionHtml = `
         <section style="margin-top: 2rem;">
             
- <div class="search-results-wrapper" style="
+            <div class="search-results-wrapper" style="
   display: ${displayMode === 'Grid' ? 'grid' : 'block'};
+  grid-template-columns: repeat(${gridColumns}, 1fr);
   gap: 1rem;
 ">
 
