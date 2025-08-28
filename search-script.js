@@ -1,4 +1,3 @@
-//<script>
 // Generate or get visitor ID
 async function getOrCreateVisitorId() {
     let visitorId = localStorage.getItem('visitorId');
@@ -53,8 +52,12 @@ async function getVisitorSessionToken() {
     }
 }
 
-// Font weight helper function
+// Font weight helper function - Updated to handle both class names and numeric values
 function fontWeightFromClass(className) {
+    // If it's already a number, return it
+    if (!isNaN(className)) return parseInt(className);
+    
+    // If it's a CSS class name, convert it
     switch (className) {
         case "font-light": return 300;
         case "font-normal": return 400;
@@ -620,5 +623,4 @@ document.addEventListener('click', (event) => {
 });
 
 
-});   
-//</script>
+});
