@@ -183,32 +183,10 @@ function renderResults(results, title, displayMode, maxItems, gridColumns = 3, p
     const sectionHtml = `
         <section style="margin-top: 2rem;">
             
-//  <div class="search-results-wrapper" style="
-//   display: ${displayMode === 'Grid' ? 'grid' : 'block'};
-//   gap: 1rem;
-// ">
-
-<div class="search-results-wrapper" style="
+ <div class="search-results-wrapper" style="
   display: ${displayMode === 'Grid' ? 'grid' : 'block'};
   gap: 1rem;
-  --sr-cols: ${gridColumns};
 ">
-</div>
-
-<!-- Global CSS -->
-<style>
-  /* default grid uses the inline variable */
-  .search-results-wrapper {
-    grid-template-columns: repeat(var(--sr-cols, 3), 1fr);
-  }
-
-  /* override on small screens */
-  @media (max-width: 675px) {
-    .search-results-wrapper {
-      grid-template-columns: repeat(1, 1fr) !important;
-    }
-  }
-</style>
 
                 ${itemsHtml}
             </div>
