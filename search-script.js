@@ -1,3 +1,19 @@
+// Load Google Fonts dynamically
+function loadGoogleFonts() {
+    // Check if Google Fonts are already loaded
+    if (document.querySelector('link[href*="fonts.googleapis.com"]')) {
+        console.log("Google Fonts already loaded");
+        return;
+    }
+    
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,100..900;1,100..900&family=Changa+One:ital@0;1&family=Droid+Sans:wght@400;700&family=Droid+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Exo:ital,wght@0,100..900;1,100..900&family=Great+Vibes&family=Inconsolata:ital,wght@0,200..900;1,200..900&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Oswald:wght@200..700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&family=Varela&family=Varela+Round&family=Vollkorn:ital,wght@0,400..900;1,400..900&family=Inter:ital,wght@0,100..900;1,100..900&display=swap';
+    link.rel = 'stylesheet';
+    link.type = 'text/css';
+    document.head.appendChild(link);
+    console.log("Google Fonts loaded dynamically");
+}
+
 // Generate or get visitor ID
 async function getOrCreateVisitorId() {
     let visitorId = localStorage.getItem('visitorId');
@@ -223,6 +239,9 @@ function renderResults(results, title, displayMode, maxItems, gridColumns = 3, p
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
+    // Load Google Fonts first
+    loadGoogleFonts();
+    
     const searchConfigDiv = document.querySelector('#search-config');
 
     if (!searchConfigDiv) {
