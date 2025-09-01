@@ -7,11 +7,30 @@ function loadGoogleFonts() {
     }
     
     const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,100..900;1,100..900&family=Changa+One:ital@0;1&family=Droid+Sans:wght@400;700&family=Droid+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Exo:ital,wght@0,100..900;1,100..900&family=Great+Vibes&family=Inconsolata:ital,wght@0,200..900;1,200..900&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Oswald:wght@200..700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&family=Varela&family=Varela+Round&family=Vollkorn:ital,wght@0,400..900;1,400..900&family=Inter:ital,wght@0,100..900;1,100..900&display=swap';
+    link.href = 'https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,100..900;1,100..900&family=Changa+One:ital@0;1&family=Droid+Sans:wght@400;700&family=Droid+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Exo:ital,wght@0,100..900;1,100..900&family=Great+Vibes:ital@0;1&family=Inconsolata:ital,wght@0,200..900;1,200..900&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Oswald:wght@200..700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&family=Varela:wght@400&family=Varela+Round:wght@400&family=Vollkorn:ital,wght@0,400..900;1,400..900&family=Inter:ital,wght@0,100..900;1,100..900&display=swap';
     link.rel = 'stylesheet';
     link.type = 'text/css';
     document.head.appendChild(link);
     console.log("Google Fonts loaded dynamically");
+    
+    // Add font loading verification
+    link.onload = () => {
+        console.log("Google Fonts CSS loaded successfully");
+        // Test if fonts are actually available
+        setTimeout(() => {
+            const testDiv = document.createElement('div');
+            testDiv.style.fontFamily = 'Great Vibes, cursive';
+            testDiv.style.position = 'absolute';
+            testDiv.style.left = '-9999px';
+            testDiv.textContent = 'Test';
+            document.body.appendChild(testDiv);
+            
+            const computedStyle = window.getComputedStyle(testDiv);
+            console.log("Great Vibes font loaded:", computedStyle.fontFamily.includes('Great Vibes'));
+            
+            document.body.removeChild(testDiv);
+        }, 1000);
+    };
 }
 
 // Generate or get visitor ID
@@ -151,22 +170,28 @@ function renderResults(results, title, displayMode, maxItems, gridColumns = 3, p
   if (displayMode === "Grid") {
     //  Grid: whole card is clickable
     return `
-      <a href="${detailUrl}" target="_blank" style="text-decoration: none; color: inherit;">
+      <a href="${detailUrl}" target="_blank" style="text-decoration: none; color: inherit; display: block; height: 100%;">
         <div class="search-result-item" 
           style="
             background: ${backgroundColor};
             border: 1px solid #ddd;
             border-radius: ${borderRadius};
             padding: 1rem;
-            margin-bottom: 1rem;
+            height: 100%;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
             box-shadow: ${boxShadowStyle};
           ">
-          <h4 style="font-size: ${titleFontSize}; font-family: ${titleFontFamily}; font-weight: ${fontWeightFromClass(titleFontWeight)}; color: ${titleColor}; text-align: ${headingAlignment}; margin-bottom: 0.5rem;">
-            ${titleText}
-          </h4>
-          ${matchedText
-            ? `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize}; font-family: ${otherFieldsFontFamily}; font-weight: ${fontWeightFromClass(otherFieldsFontWeight)}; text-align: ${bodyAlignment};">${matchedText}...</p>`
-            : fieldsHtml}
+          <div>
+            <h4 style="font-size: ${titleFontSize}; font-family: ${titleFontFamily}; font-weight: ${fontWeightFromClass(titleFontWeight)}; color: ${titleColor}; text-align: ${headingAlignment}; margin-bottom: 0.5rem; word-wrap: break-word;">
+              ${titleText}
+            </h4>
+            ${matchedText
+              ? `<p style="color: ${otherFieldsColor}; font-size: ${otherFieldsFontSize}; font-family: ${otherFieldsFontFamily}; font-weight: ${fontWeightFromClass(otherFieldsFontWeight)}; text-align: ${bodyAlignment}; flex-grow: 1;">${matchedText}...</p>`
+              : `<div style="flex-grow: 1;">${fieldsHtml}</div>`}
+          </div>
         </div>
       </a>
     `;
@@ -206,6 +231,8 @@ function renderResults(results, title, displayMode, maxItems, gridColumns = 3, p
   display: ${displayMode === 'Grid' ? 'grid' : 'block'};
   grid-template-columns: repeat(${gridColumns}, 1fr);
   gap: 1rem;
+  width: 100%;
+  max-width: 100%;
 ">
 
                 ${itemsHtml}
@@ -238,9 +265,64 @@ function renderResults(results, title, displayMode, maxItems, gridColumns = 3, p
     return sectionHtml;
 }
 
+// Pre-load fonts and data to prevent lazy loading
+async function preloadData() {
+    console.log("Preloading data to prevent lazy loading...");
+    
+    // Pre-load fonts by creating a test element with each font
+    const testFonts = [
+        'Great Vibes', 'Oswald', 'Montserrat', 'Lato', 'Inter', 
+        'Open Sans', 'Bitter', 'Merriweather', 'Ubuntu', 'PT Sans'
+    ];
+    
+    const testDiv = document.createElement('div');
+    testDiv.style.position = 'absolute';
+    testDiv.style.left = '-9999px';
+    testDiv.style.visibility = 'hidden';
+    
+    testFonts.forEach(font => {
+        const span = document.createElement('span');
+        span.style.fontFamily = font;
+        span.textContent = 'Test';
+        testDiv.appendChild(span);
+    });
+    
+    document.body.appendChild(testDiv);
+    
+    // Pre-load search data with a random query
+    try {
+        const randomQueries = ['test', 'sample', 'demo', 'example', 'search'];
+        const randomQuery = randomQueries[Math.floor(Math.random() * randomQueries.length)];
+        
+        const token = await getVisitorSessionToken();
+        if (token) {
+            const headers = { Authorization: `Bearer ${token}` };
+            const siteName = window.location.hostname.replace(/^www\./, '').split('.')[0];
+            
+            // Make a quick pre-load request
+            await fetch(`https://search-server.long-rain-28bb.workers.dev/api/search-index?query=${encodeURIComponent(randomQuery)}&siteName=${siteName}`, { 
+                headers,
+                method: 'HEAD' // Just check if endpoint is available
+            });
+        }
+    } catch (error) {
+        console.log("Pre-load attempt completed (errors are normal)");
+    }
+    
+    // Remove test element after a short delay
+    setTimeout(() => {
+        if (testDiv.parentNode) {
+            testDiv.parentNode.removeChild(testDiv);
+        }
+    }, 1000);
+}
+
 document.addEventListener("DOMContentLoaded", async function () {
     // Load Google Fonts first
     loadGoogleFonts();
+    
+    // Start pre-loading immediately
+    preloadData();
     
     const searchConfigDiv = document.querySelector('#search-config');
 
