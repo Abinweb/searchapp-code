@@ -198,12 +198,27 @@ function fontWeightFromClass(className) {
 
 // Render search results with pagination
 function renderResults(results, title, displayMode, maxItems, gridColumns = 3, paginationType = "None", container, currentPage = 1, isPageResult = true, styles = {}) {
-   
-   if (!Array.isArray(results) || results.length === 0) return "";
-   const totalPages = maxItems ? Math.ceil(results.length / maxItems) : 1;
-   const startIndex = maxItems ? (currentPage - 1) * maxItems : 0;
-   const endIndex = maxItems ? startIndex + maxItems : results.length;
-   const pagedResults = results.slice(startIndex, endIndex);
+    
+    if (!Array.isArray(results) || results.length === 0) return "";
+    const totalPages = maxItems ? Math.ceil(results.length / maxItems) : 1;
+    const startIndex = maxItems ? (currentPage - 1) * maxItems : 0;
+    const endIndex = maxItems ? startIndex + maxItems : results.length;
+    const pagedResults = results.slice(startIndex, endIndex);
+    
+    // Responsive grid columns based on screen width
+    const getResponsiveGridColumns = () => {
+      const screenWidth = window.innerWidth;
+      if (screenWidth <= 675) {
+        return 1; // Single column on mobile
+      } else if (screenWidth <= 1024) {
+        return Math.min(gridColumns, 2); // Max 2 columns on tablets
+      } else {
+        return gridColumns; // Full grid on desktop
+      }
+    };
+    
+    const responsiveGridColumns = getResponsiveGridColumns();
+    console.log(`Screen width: ${window.innerWidth}px, Grid columns: ${responsiveGridColumns}`);
    
    // Debug: Check if fonts are available
    console.log("Rendering results with styles:", styles);
@@ -336,15 +351,15 @@ if (displayMode === "Grid") {
       paginationHtml += `<div style="text-align:center;"><button class="load-more-button" style="margin-top:1rem;">Load More</button></div>`;
   }
 
-const sectionHtml = `
-      <section style="margin-top: 2rem;">
-          
-          <div class="search-results-wrapper" style="
-display: ${displayMode === 'Grid' ? 'grid' : 'block'};
-grid-template-columns: repeat(${gridColumns}, 1fr);
-gap: 1rem;
-width: 100%;
-max-width: 100%;
+ const sectionHtml = `
+       <section style="margin-top: 2rem;">
+           
+           <div class="search-results-wrapper" style="
+ display: ${displayMode === 'Grid' ? 'grid' : 'block'};
+ grid-template-columns: repeat(${responsiveGridColumns}, 1fr);
+ gap: 1rem;
+ width: 100%;
+ max-width: 100%;
 ">
 
               ${itemsHtml}
@@ -626,6 +641,19 @@ return str.replace(/\w\S*/g, (txt) =>
    .search-result-item p[style*="Great Vibes"] {
      font-family: 'Great Vibes', cursive !important;
    }
+   
+   /* Responsive grid breakpoints */
+   @media (max-width: 675px) {
+     .search-results-wrapper {
+       grid-template-columns: repeat(1, 1fr) !important;
+     }
+   }
+   
+   @media (max-width: 480px) {
+     .search-results-wrapper {
+       gap: 0.5rem !important;
+     }
+   }
 
 
 
@@ -891,9 +919,27 @@ performSearch(); // ✅ trigger search on submit
 });
   
 document.addEventListener('click', (event) => {
-if (!suggestionBox.contains(event.target) && event.target !== input) {
-  suggestionBox.style.display = "none";
-}
+ if (!suggestionBox.contains(event.target) && event.target !== input) {
+   suggestionBox.style.display = "none";
+ }
+});
+
+// Handle window resize for responsive grid
+let resizeTimeout;
+window.addEventListener('resize', () => {
+ clearTimeout(resizeTimeout);
+ resizeTimeout = setTimeout(() => {
+   // Re-render results with new responsive grid if they exist
+   const existingResults = document.querySelector('.combined-search-results');
+   if (existingResults && resultsContainer.children.length > 0) {
+     console.log('Window resized, updating grid layout...');
+     // Trigger a re-render with current results
+     const currentQuery = input?.value || new URLSearchParams(window.location.search).get('q');
+     if (currentQuery) {
+       performSearch();
+     }
+   }
+ }, 250); // Debounce resize events
 });
 
 
