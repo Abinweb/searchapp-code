@@ -408,33 +408,13 @@ async function preloadData() {
   testDiv.style.visibility = 'hidden';
   
   testFonts.forEach(font => {
-      const span = document.createElement('span');
-      span.style.fontFamily = font;
-      span.textContent = 'Test';
-      testDiv.appendChild(span);
+    const span = document.createElement('span');
+    span.style.fontFamily = font;
+    span.textContent = 'Test';
+    testDiv.appendChild(span);
   });
   
   document.body.appendChild(testDiv);
-  
-  // Pre-load search data with a random query
-  try {
-      const randomQueries = ['test', 'sample', 'demo', 'example', 'search'];
-      const randomQuery = randomQueries[Math.floor(Math.random() * randomQueries.length)];
-      
-      const token = await getVisitorSessionToken();
-      if (token) {
-          const headers = { Authorization: `Bearer ${token}` };
-          const siteName = window.location.hostname.replace(/^www\./, '').split('.')[0];
-          
-          // Make a quick pre-load request
-          await fetch(`https://search-server.long-rain-28bb.workers.dev/api/search-index?query=${encodeURIComponent(randomQuery)}&siteName=${siteName}`, { 
-              headers,
-              method: 'HEAD' // Just check if endpoint is available
-          });
-      }
-  } catch (error) {
-      console.log("Pre-load attempt completed (errors are normal)");
-  }
   
   // Remove test element after a short delay
   setTimeout(() => {
@@ -442,6 +422,100 @@ async function preloadData() {
           testDiv.parentNode.removeChild(testDiv);
       }
   }, 1000);
+}
+
+// Perform background search to warm up the system
+async function performBackgroundSearch() {
+  console.log("Performing background search to warm up the system...");
+  
+  try {
+    const token = await getVisitorSessionToken();
+    if (!token) {
+      console.log("No token available for background search");
+      return;
+    }
+    
+    const siteName = window.location.hostname.replace(/^www\./, '').split('.')[0];
+    const headers = { Authorization: `Bearer ${token}` };
+    
+    // Get search configuration for background search
+    const searchConfigDiv = document.querySelector('#search-config');
+    if (!searchConfigDiv) {
+      console.log("No search config found for background search");
+      return;
+    }
+    
+    const selectedCollections = JSON.parse(searchConfigDiv.getAttribute('data-selected-collections') || '[]');
+    const selectedFieldsSearch = JSON.parse(searchConfigDiv.getAttribute('data-selected-fields-search') || '[]');
+    const selectedFieldsDisplay = JSON.parse(searchConfigDiv.getAttribute('data-selected-fields-display') || '[]');
+    const selectedOption = searchConfigDiv.getAttribute('data-selected-option');
+    
+    // Random keywords for background search
+    const backgroundKeywords = [
+      'the', 'and', 'for', 'with', 'from', 'this', 'that', 'have', 'will', 'been',
+      'about', 'would', 'think', 'their', 'time', 'there', 'could', 'people', 'other',
+      'first', 'after', 'should', 'because', 'through', 'during', 'before', 'however',
+      'between', 'never', 'under', 'know', 'world', 'place', 'year', 'work', 'life',
+      'company', 'business', 'service', 'product', 'information', 'technology'
+    ];
+    
+    // Select 2-3 random keywords for a meaningful search
+    const numKeywords = Math.floor(Math.random() * 2) + 2; // 2 or 3 keywords
+    const selectedKeywords = [];
+    for (let i = 0; i < numKeywords; i++) {
+      const randomIndex = Math.floor(Math.random() * backgroundKeywords.length);
+      selectedKeywords.push(backgroundKeywords[randomIndex]);
+    }
+    
+    const backgroundQuery = selectedKeywords.join(' ');
+    console.log("Background search query:", backgroundQuery);
+    
+    // Perform background search for CMS content
+    if (selectedOption === "Collection" || selectedOption === "Both") {
+      const collectionsParam = encodeURIComponent(JSON.stringify(selectedCollections));
+      const fieldsSearchParam = encodeURIComponent(JSON.stringify(selectedFieldsSearch));
+      const fieldsDisplayParam = encodeURIComponent(JSON.stringify(selectedFieldsDisplay));
+      
+      const cmsResponse = await fetch(
+        `https://search-server.long-rain-28bb.workers.dev/api/search-cms?query=${encodeURIComponent(backgroundQuery)}&siteName=${siteName}&collections=${collectionsParam}&searchFields=${fieldsSearchParam}&displayFields=${fieldsDisplayParam}`,
+        { headers }
+      );
+      
+      if (cmsResponse.ok) {
+        const cmsData = await cmsResponse.json();
+        console.log(`Background CMS search completed: ${cmsData.results?.length || 0} results found`);
+      }
+    }
+    
+    // Also perform background search for pages
+    if (selectedOption === "Pages" || selectedOption === "Both") {
+      const pageResponse = await fetch(
+        `https://search-server.long-rain-28bb.workers.dev/api/search-index?query=${encodeURIComponent(backgroundQuery)}&siteName=${siteName}`,
+        { headers }
+      );
+      
+      if (pageResponse.ok) {
+        const pageData = await pageResponse.json();
+        console.log(`Background page search completed: ${pageData.results?.length || 0} results found`);
+      }
+    }
+    
+    console.log("Background search completed successfully - system warmed up!");
+    
+  } catch (error) {
+    console.log("Background search error (this is normal):", error.message);
+  }
+}
+
+// Set up periodic background searches to keep system warm
+function setupPeriodicBackgroundSearch() {
+  // Perform background search every 5 minutes to keep system warm
+  setInterval(() => {
+    console.log("Performing periodic background search to maintain system performance...");
+    performBackgroundSearch();
+  }, 5 * 60 * 1000); // 5 minutes
+  
+  console.log("Periodic background search setup complete - will run every 5 minutes");
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -453,6 +527,13 @@ document.addEventListener("DOMContentLoaded", async function () {
   
   // Start pre-loading immediately
   preloadData();
+  
+  // Perform background search to warm up the system (after a short delay)
+  setTimeout(() => {
+    performBackgroundSearch();
+    // Also set up periodic background searches
+    setupPeriodicBackgroundSearch();
+  }, 2000); // Wait 2 seconds for initial setup
   
   const searchConfigDiv = document.querySelector('#search-config');
 
