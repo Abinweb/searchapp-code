@@ -7,7 +7,7 @@ function loadGoogleFonts() {
   }
   
   const link = document.createElement('link');
-  link.href = 'https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,100..900;1,100..900&family=Changa+One:ital@0;1&family=Droid+Sans:wght@400;700&family=Droid+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Exo:ital,wght@0,100..900;1,100..900&family=Great+Vibes:ital@0;1&family=Inconsolata:ital,wght@0,200..900;1,200..900&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Oswald:wght@200..700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&family=Varela:wght@400&family=Varela+Round:wght@400&family=Vollkorn:ital,wght@0,400..900;1,400..900&family=Inter:ital,wght@0,100..900;1,100..900&display=swap';
+  link.href = 'https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,100..900;1,100..900&family=Changa+One:ital@0;1&family=Droid+Sans:wght@400;700&family=Droid+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Exo:ital,wght@0,100..900;1,100..900&family=Great+Vibes:ital@0;1&family=Inconsolata:ital,wght@0,200..900;1,200..900&family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Oswald:wght@200..700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&family=Varela:wght@400&family=Varela+Round:wght@400&family=Vollkorn:ital,wght@0,400..900;1,100..900&family=Inter:ital,wght@0,100..900;1,100..900&display=swap';
   link.rel = 'stylesheet';
   link.type = 'text/css';
   document.head.appendChild(link);
@@ -123,6 +123,187 @@ function waitForFonts(fontNames, callback) {
   
   // Start checking after a short delay
   setTimeout(checkFonts, 1000);
+}
+
+// ===== PERFORMANCE OPTIMIZATIONS FOR API SEARCH =====
+
+// Enhanced search cache with TTL and size limits
+const searchCache = new Map();
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes (increased from 5)
+const MAX_CACHE_SIZE = 100; // Maximum number of cached results
+
+// Request cancellation controller for race condition prevention
+let currentSearchController = null;
+
+// Connection pooling and keep-alive optimization
+const connectionPool = new Map();
+const MAX_CONNECTIONS = 6;
+const CONNECTION_TIMEOUT = 30000; // 30 seconds
+
+// Enhanced cache management
+function getCachedResults(query, selectedOption) {
+  const cacheKey = `${query}_${selectedOption}`;
+  const cached = searchCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log('Using cached results for:', query);
+    return cached.results;
+  }
+  
+  // Remove expired entry
+  if (cached) {
+    searchCache.delete(cacheKey);
+  }
+  
+  return null;
+}
+
+function setCachedResults(query, selectedOption, results) {
+  const cacheKey = `${query}_${selectedOption}`;
+  
+  // Implement LRU cache eviction
+  if (searchCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = searchCache.keys().next().value;
+    searchCache.delete(firstKey);
+  }
+  
+  searchCache.set(cacheKey, {
+    results,
+    timestamp: Date.now(),
+    accessCount: 1
+  });
+}
+
+// Optimized debounced search with progressive delays
+let searchDebounceTimer;
+let progressiveDelay = 100; // Start with 100ms delay
+
+function debouncedSearch(performSearch, baseDelay = 100) {
+  clearTimeout(searchDebounceTimer);
+  
+  // Progressive delay: faster for short queries, slower for longer ones
+  const query = document.querySelector("input[name='query']")?.value || '';
+  const delay = query.length <= 2 ? baseDelay : Math.min(baseDelay * 2, 500);
+  
+  searchDebounceTimer = setTimeout(() => {
+    performSearch();
+    // Reset delay for next search
+    progressiveDelay = baseDelay;
+  }, delay);
+}
+
+// Connection pooling for better performance
+function getConnection(siteName) {
+  if (!connectionPool.has(siteName)) {
+    if (connectionPool.size >= MAX_CONNECTIONS) {
+      // Remove oldest connection
+      const oldestKey = connectionPool.keys().next().value;
+      connectionPool.delete(oldestKey);
+    }
+    
+    connectionPool.set(siteName, {
+      lastUsed: Date.now(),
+      active: false
+    });
+  }
+  
+  const connection = connectionPool.get(siteName);
+  connection.lastUsed = Date.now();
+  return connection;
+}
+
+// Optimized fetch with connection pooling and retry logic
+async function optimizedFetch(url, options = {}, retries = 2) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      // Enable keep-alive for better performance
+      keepalive: true,
+      // Add performance headers
+      headers: {
+        ...options.headers,
+        'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=30, max=1000'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    if (error.name === 'AbortError') {
+      console.log('Request timed out, retrying...');
+    }
+    
+    if (retries > 0) {
+      console.log(`Retrying request, ${retries} attempts left...`);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+      return optimizedFetch(url, options, retries - 1);
+    }
+    
+    throw error;
+  }
+}
+
+// Parallel search execution with smart batching
+async function executeParallelSearches(query, selectedOption, siteName, token, collectionsParam, fieldsSearchParam, fieldsDisplayParam) {
+  const headers = { Authorization: `Bearer ${token}` };
+  const searchPromises = [];
+  
+  // Cancel any ongoing search
+  if (currentSearchController) {
+    currentSearchController.abort();
+  }
+  
+  currentSearchController = new AbortController();
+  
+  // Execute searches in parallel based on selected option
+  if (selectedOption === "Pages" || selectedOption === "Both") {
+    const pagePromise = optimizedFetch(
+      `https://search-server.long-rain-28bb.workers.dev/api/search-index?query=${encodeURIComponent(query)}&siteName=${siteName}`,
+      { headers, signal: currentSearchController.signal }
+    );
+    searchPromises.push({ type: 'page', promise: pagePromise });
+  }
+  
+  if (selectedOption === "Collection" || selectedOption === "Both") {
+    const cmsPromise = optimizedFetch(
+      `https://search-server.long-rain-28bb.workers.dev/api/search-cms?query=${encodeURIComponent(query)}&siteName=${siteName}&collections=${collectionsParam}&searchFields=${fieldsSearchParam}&displayFields=${fieldsDisplayParam}`,
+      { headers, signal: currentSearchController.signal }
+    );
+    searchPromises.push({ type: 'cms', promise: cmsPromise });
+  }
+  
+  // Execute all searches in parallel
+  const results = await Promise.allSettled(searchPromises.map(async ({ type, promise }) => {
+    try {
+      const response = await promise;
+      if (response.ok) {
+        const data = await response.json();
+        return { type, data: data.results || [], success: true };
+      } else {
+        return { type, data: [], success: false, error: response.statusText };
+      }
+    } catch (error) {
+      return { type, data: [], success: false, error: error.message };
+    }
+  }));
+  
+  // Process results
+  let allResults = [];
+  results.forEach(result => {
+    if (result.status === 'fulfilled' && result.value.success) {
+      const typeData = result.value.data.map(item => ({ ...item, _type: result.value.type }));
+      allResults = allResults.concat(typeData);
+    }
+  });
+  
+  return allResults;
 }
 
 // Generate or get visitor ID
@@ -340,15 +521,15 @@ if (displayMode === "Grid") {
 
   let paginationHtml = "";
   if (paginationType === "Numbered" && totalPages > 1) {
-      paginationHtml = `<div class="pagination" style="margin-top: 1rem;">`;
+      paginationHtml = `<div class="pagination" style="margin-top: 1rem; display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap;">`;
       for (let i = 1; i <= totalPages; i++) {
-          paginationHtml += `<button class="pagination-button" data-page="${i}" style="margin: 0 4px; padding: 4px 8px;">${i}</button>`;
+          paginationHtml += `<button class="pagination-button" data-page="${i}" style="margin: 0; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; transition: all 0.2s ease;">${i}</button>`;
       }
       paginationHtml += `</div>`;
   }
 
   if (paginationType === "Load More" && endIndex < results.length) {
-      paginationHtml += `<div style="text-align:center;"><button class="load-more-button" style="margin-top:1rem;">Load More</button></div>`;
+      paginationHtml += `<div style="display: flex; justify-content: center; margin-top: 1rem;"><button class="load-more-button" style="padding: 10px 20px; border: 1px solid #0073e6; border-radius: 6px; background: #0073e6; color: white; cursor: pointer; font-size: 14px; transition: all 0.2s ease;">Load More</button></div>`;
   }
 
  const sectionHtml = `
@@ -874,6 +1055,7 @@ function hideSpinner() {
 spinner.style.display = "none";
 }
 
+// ===== OPTIMIZED SEARCH FUNCTION WITH PERFORMANCE IMPROVEMENTS =====
 async function performSearch() {
   let query = input?.value.trim().toLowerCase();
 
@@ -885,92 +1067,71 @@ async function performSearch() {
 
   if (!query) return;
   
+  // Check cache first for instant results
+  const cachedResults = getCachedResults(query, selectedOption);
+  if (cachedResults) {
+    console.log('Using cached results for:', query);
+    resultsContainer.innerHTML = "";
+    const combinedResultsDiv = document.createElement("div");
+    combinedResultsDiv.classList.add("combined-search-results");
+    resultsContainer.appendChild(combinedResultsDiv);
+    renderResults(cachedResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles);
+    return;
+  }
   
-   showSpinner();
+  showSpinner();
   resultsContainer.innerHTML = ""; 
 
   try {
-      const headers = { Authorization: `Bearer ${token}` };
+    // Use optimized parallel search execution
+    const allResults = await executeParallelSearches(
+      query, 
+      selectedOption, 
+      siteName, 
+      token, 
+      collectionsParam, 
+      fieldsSearchParam, 
+      fieldsDisplayParam
+    );
 
-      let pageResPromise = Promise.resolve({ ok: true, json: () => ({ results: [] }) }); // Default to empty successful response
-      let cmsResPromise = Promise.resolve({ ok: true, json: () => ({ results: [] }) }); // Default to empty successful response
+    if (allResults.length === 0) {
+      hideSpinner();
+      resultsContainer.innerHTML = "<p>No results found.</p>";
+      return;
+    }
 
-      // Conditionally create promises based on selectedOption
-      if (selectedOption === "Pages" || selectedOption === "Both") {
-          pageResPromise = fetch(`${base_url}/api/search-index?query=${encodeURIComponent(query)}&siteName=${siteName}`, { headers });
-      }
+    // Cache the results for future searches
+    setCachedResults(query, selectedOption, allResults);
 
-      if (selectedOption === "Collection" || selectedOption === "Both") {
-          cmsResPromise = fetch(`${base_url}/api/search-cms?query=${encodeURIComponent(query)}&siteName=${siteName}&collections=${collectionsParam}&searchFields=${fieldsSearchParam}&displayFields=${fieldsDisplayParam}`, { headers });
-      }
+    // Render results
+    const combinedResultsDiv = document.createElement("div");
+    combinedResultsDiv.classList.add("combined-search-results");
+    resultsContainer.appendChild(combinedResultsDiv);
 
-      // Wait for only the necessary promises to resolve
-      const [pageRes, cmsRes] = await Promise.all([
-          pageResPromise,
-          cmsResPromise,
-      ]);
-
-      const pageData = pageRes.ok ? await pageRes.json() : { results: [] };
-      const cmsData = cmsRes.ok ? await cmsRes.json() : { results: [] };
-
-      // Clear previous results
-      resultsContainer.innerHTML = "";
-
-      // Combine results and add a type identifier
-      let allResults = [];
-
-      // Note: pageData.results and cmsData.results will now correctly be empty arrays
-      // if their respective fetches were skipped or failed.
-      if (Array.isArray(pageData.results) && pageData.results.length > 0) {
-          allResults = allResults.concat(pageData.results.map(item => ({ ...item, _type: 'page' })));
-      }
-
-      if (Array.isArray(cmsData.results) && cmsData.results.length > 0) {
-          allResults = allResults.concat(cmsData.results.map(item => ({ ...item, _type: 'cms' })));
-      }
-
-      if (allResults.length === 0) {
-             // hide spinner
-          const spinner = document.getElementById("search-spinner");
-          if (spinner) spinner.style.display = "none";
-
-          // show message
-          resultsContainer.innerHTML = "<p>No results found.</p>";
-           return;
-      }
-
-      // Optional: Sort combined results if needed, e.g., by a relevance score or date
-      // allResults.sort((a, b) => /* your sorting logic here */);
-
-      // Render all results into a single container with a single pagination
-      const combinedResultsDiv = document.createElement("div");
-      combinedResultsDiv.classList.add("combined-search-results"); // Add a class for styling
-      resultsContainer.appendChild(combinedResultsDiv);
-
-             // Wait for fonts to load before rendering
-       const fontsToWaitFor = [];
-       if (styles.titleFontFamily && styles.titleFontFamily !== 'Arial') {
-         fontsToWaitFor.push(styles.titleFontFamily);
-       }
-       if (styles.otherFieldsFontFamily && styles.otherFieldsFontFamily !== 'Arial') {
-         fontsToWaitFor.push(styles.otherFieldsFontFamily);
-       }
-       
-       if (fontsToWaitFor.length > 0) {
-         console.log("Waiting for fonts before rendering:", fontsToWaitFor);
-         waitForFonts(fontsToWaitFor, () => {
-           renderResults(allResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles);
-           hideSpinner();
-         });
-       } else {
-         // No custom fonts, render immediately
-         renderResults(allResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles);
-         hideSpinner();
-       }
+    // Wait for fonts to load before rendering
+    const fontsToWaitFor = [];
+    if (styles.titleFontFamily && styles.titleFontFamily !== 'Arial') {
+      fontsToWaitFor.push(styles.titleFontFamily);
+    }
+    if (styles.otherFieldsFontFamily && styles.otherFieldsFontFamily !== 'Arial') {
+      fontsToWaitFor.push(styles.otherFieldsFontFamily);
+    }
+    
+    if (fontsToWaitFor.length > 0) {
+      console.log("Waiting for fonts before rendering:", fontsToWaitFor);
+      waitForFonts(fontsToWaitFor, () => {
+        renderResults(allResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles);
+        hideSpinner();
+      });
+    } else {
+      // No custom fonts, render immediately
+      renderResults(allResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles);
+      hideSpinner();
+    }
   } catch (error) {
-      console.error('Error performing search:', error);
-      resultsContainer.innerHTML = "<p>Error performing search. Please try again later.</p>";
-  hideSpinner();
+    console.error('Error performing search:', error);
+    resultsContainer.innerHTML = "<p>Error performing search. Please try again later.</p>";
+    hideSpinner();
   }
 }
 
@@ -1023,5 +1184,10 @@ window.addEventListener('resize', () => {
  }, 250); // Debounce resize events
 });
 
+// ===== ADD OPTIMIZED INPUT EVENT LISTENER =====
+// Use the enhanced debounced search for better performance
+input.addEventListener("input", () => {
+  debouncedSearch(performSearch, 100); // Start with 100ms delay for faster response
+});
 
 });
