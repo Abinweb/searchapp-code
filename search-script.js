@@ -386,20 +386,33 @@ function renderResults(results, title, displayMode, maxItems, gridColumns = 3, p
     const endIndex = maxItems ? startIndex + maxItems : results.length;
     const pagedResults = results.slice(startIndex, endIndex);
     
-    // Responsive grid columns based on screen width
+    // Enhanced responsive grid columns with fallback protection
     const getResponsiveGridColumns = () => {
-      const screenWidth = window.innerWidth;
-      if (screenWidth <= 675) {
-        return 1; // Single column on mobile
-      } else if (screenWidth <= 1024) {
-        return Math.min(gridColumns, 2); // Max 2 columns on tablets
-      } else {
-        return gridColumns; // Full grid on desktop
+      try {
+        const screenWidth = window.innerWidth || 1200; // Fallback width
+        const maxColumns = Math.max(1, Math.min(gridColumns || 3, 6)); // Ensure valid range
+        
+        if (screenWidth <= 480) {
+          return 1; // Single column on small mobile
+        } else if (screenWidth <= 675) {
+          return 1; // Single column on mobile
+        } else if (screenWidth <= 768) {
+          return Math.min(maxColumns, 2); // Max 2 columns on small tablets
+        } else if (screenWidth <= 1024) {
+          return Math.min(maxColumns, 3); // Max 3 columns on tablets
+        } else if (screenWidth <= 1440) {
+          return Math.min(maxColumns, 4); // Max 4 columns on medium screens
+        } else {
+          return maxColumns; // Full grid on large screens
+        }
+      } catch (error) {
+        console.warn('Error calculating responsive grid columns, using fallback:', error);
+        return Math.max(1, Math.min(gridColumns || 3, 3)); // Safe fallback
       }
     };
     
     const responsiveGridColumns = getResponsiveGridColumns();
-    console.log(`Screen width: ${window.innerWidth}px, Grid columns: ${responsiveGridColumns}`);
+    console.log(`Screen width: ${window.innerWidth}px, Grid columns: ${responsiveGridColumns}, Original: ${gridColumns}`);
    
    // Debug: Check if fonts are available
    console.log("Rendering results with styles:", styles);
@@ -476,10 +489,10 @@ const fieldsHtml = Object.entries(item)
 const boxShadowStyle = boxShadow ? "0 2px 6px rgba(0, 0, 0, 0.1)" : "none";
 
 if (displayMode === "Grid") {
-  //  Grid: whole card is clickable
+  //  Grid: whole card is clickable with enhanced reliability
   return `
-    <a href="${detailUrl}" target="_blank" style="text-decoration: none; color: inherit; display: block; height: 100%;">
-      <div class="search-result-item" 
+    <a href="${detailUrl}" target="_blank" style="text-decoration: none; color: inherit; display: block; height: 100%; min-height: 200px;">
+      <div class="search-result-item grid-item" 
         style="
           background: ${backgroundColor};
           border: 1px solid #ddd;
@@ -491,14 +504,40 @@ if (displayMode === "Grid") {
           flex-direction: column;
           justify-content: space-between;
           box-shadow: ${boxShadowStyle};
+          box-sizing: border-box;
+          overflow: hidden;
+          word-wrap: break-word;
+          word-break: break-word;
         ">
-        <div>
-          <h4 style="font-size: ${titleFontSize} !important; font-family: '${titleFontFamily}', sans-serif !important; font-weight: ${fontWeightFromClass(titleFontWeight)} !important; color: ${titleColor} !important; text-align: ${headingAlignment} !important; margin-bottom: 0.5rem; word-wrap: break-word;">
+        <div style="flex: 1; display: flex; flex-direction: column;">
+          <h4 style="
+            font-size: ${titleFontSize} !important; 
+            font-family: '${titleFontFamily}', sans-serif !important; 
+            font-weight: ${fontWeightFromClass(titleFontWeight)} !important; 
+            color: ${titleColor} !important; 
+            text-align: ${headingAlignment} !important; 
+            margin-bottom: 0.5rem; 
+            word-wrap: break-word;
+            word-break: break-word;
+            line-height: 1.3;
+            margin-top: 0;
+          ">
             ${titleText}
           </h4>
           ${matchedText
-            ? `<p style="color: ${otherFieldsColor} !important; font-size: ${otherFieldsFontSize} !important; font-family: '${otherFieldsFontFamily}', sans-serif !important; font-weight: ${fontWeightFromClass(otherFieldsFontWeight)} !important; text-align: ${bodyAlignment} !important; flex-grow: 1;">${matchedText}...</p>`
-            : `<div style="flex-grow: 1;">${fieldsHtml}</div>`}
+            ? `<p style="
+                color: ${otherFieldsColor} !important; 
+                font-size: ${otherFieldsFontSize} !important; 
+                font-family: '${otherFieldsFontFamily}', sans-serif !important; 
+                font-weight: ${fontWeightFromClass(otherFieldsFontWeight)} !important; 
+                text-align: ${bodyAlignment} !important; 
+                flex-grow: 1;
+                margin: 0;
+                line-height: 1.4;
+                word-wrap: break-word;
+                word-break: break-word;
+              ">${matchedText}...</p>`
+            : `<div style="flex-grow: 1; word-wrap: break-word; word-break: break-word;">${fieldsHtml}</div>`}
         </div>
       </div>
     </a>
@@ -520,16 +559,62 @@ if (displayMode === "Grid") {
 
 
   let paginationHtml = "";
-  if (paginationType === "Numbered" && totalPages > 1) {
-      paginationHtml = `<div class="pagination" style="margin-top: 1rem; display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap;">`;
-      for (let i = 1; i <= totalPages; i++) {
-          paginationHtml += `<button class="pagination-button" data-page="${i}" style="margin: 0; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; transition: all 0.2s ease;">${i}</button>`;
+  
+  // Enhanced pagination with better error handling and responsive design
+  if (paginationType === "Numbered" && totalPages > 1 && totalPages <= 100) { // Limit to prevent excessive buttons
+      paginationHtml = `<div class="pagination" style="margin-top: 1rem; display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px; box-sizing: border-box;">`;
+      
+      // Add previous button if not on first page
+      if (currentPage > 1) {
+          paginationHtml += `<button class="pagination-button prev-button" data-page="${currentPage - 1}" style="margin: 0; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; transition: all 0.2s ease; min-width: 40px;">←</button>`;
       }
+      
+      // Calculate which page numbers to show (smart pagination)
+      const maxVisiblePages = Math.min(7, totalPages); // Show max 7 page numbers
+      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+      
+      // Adjust start page if we're near the end
+      if (endPage - startPage < maxVisiblePages - 1) {
+          startPage = Math.max(1, endPage - maxVisiblePages + 1);
+      }
+      
+      // Show first page if not visible
+      if (startPage > 1) {
+          paginationHtml += `<button class="pagination-button" data-page="1" style="margin: 0; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; transition: all 0.2s ease; min-width: 40px;">1</button>`;
+          if (startPage > 2) {
+              paginationHtml += `<span style="padding: 0 8px; color: #666;">...</span>`;
+          }
+      }
+      
+      // Show visible page numbers
+      for (let i = startPage; i <= endPage; i++) {
+          const isCurrentPage = i === currentPage;
+          const buttonStyle = isCurrentPage 
+              ? 'margin: 0; padding: 8px 12px; border: 1px solid #0073e6; border-radius: 4px; background: #0073e6; color: white; cursor: pointer; transition: all 0.2s ease; min-width: 40px; font-weight: bold;'
+              : 'margin: 0; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; transition: all 0.2s ease; min-width: 40px;';
+          
+          paginationHtml += `<button class="pagination-button ${isCurrentPage ? 'current-page' : ''}" data-page="${i}" style="${buttonStyle}">${i}</button>`;
+      }
+      
+      // Show last page if not visible
+      if (endPage < totalPages) {
+          if (endPage < totalPages - 1) {
+              paginationHtml += `<span style="padding: 0 8px; color: #666;">...</span>`;
+          }
+          paginationHtml += `<button class="pagination-button" data-page="${totalPages}" style="margin: 0; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; transition: all 0.2s ease; min-width: 40px;">${totalPages}</button>`;
+      }
+      
+      // Add next button if not on last page
+      if (currentPage < totalPages) {
+          paginationHtml += `<button class="pagination-button next-button" data-page="${currentPage + 1}" style="margin: 0; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; transition: all 0.2s ease; min-width: 40px;">→</button>`;
+      }
+      
       paginationHtml += `</div>`;
   }
 
   if (paginationType === "Load More" && endIndex < results.length) {
-      paginationHtml += `<div style="display: flex; justify-content: center; margin-top: 1rem;"><button class="load-more-button" style="padding: 10px 20px; border: 1px solid #0073e6; border-radius: 6px; background: #0073e6; color: white; cursor: pointer; font-size: 14px; transition: all 0.2s ease;">Load More</button></div>`;
+      paginationHtml += `<div style="display: flex; justify-content: center; margin-top: 1rem; padding: 10px; box-sizing: border-box;"><button class="load-more-button" style="padding: 12px 24px; border: 1px solid #0073e6; border-radius: 6px; background: #0073e6; color: white; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; min-width: 120px;">Load More</button></div>`;
   }
 
  const sectionHtml = `
@@ -541,6 +626,9 @@ if (displayMode === "Grid") {
  gap: 1rem;
  width: 100%;
  max-width: 100%;
+ min-height: 200px;
+ box-sizing: border-box;
+ overflow: hidden;
 ">
 
               ${itemsHtml}
@@ -904,16 +992,111 @@ return str.replace(/\w\S*/g, (txt) =>
      font-family: 'Great Vibes', cursive !important;
    }
    
-   /* Responsive grid breakpoints */
-   @media (max-width: 675px) {
+   /* Enhanced responsive grid breakpoints with fallback protection */
+   .search-results-wrapper {
+     display: grid !important;
+     grid-template-columns: repeat(1, 1fr) !important;
+     gap: 1rem !important;
+     width: 100% !important;
+     max-width: 100% !important;
+     box-sizing: border-box !important;
+     overflow: hidden !important;
+   }
+   
+   @media (min-width: 481px) {
      .search-results-wrapper {
-       grid-template-columns: repeat(1, 1fr) !important;
+       grid-template-columns: repeat(2, 1fr) !important;
+       gap: 1rem !important;
      }
    }
    
-   @media (max-width: 480px) {
+   @media (min-width: 676px) {
      .search-results-wrapper {
-       gap: 0.5rem !important;
+       grid-template-columns: repeat(3, 1fr) !important;
+       gap: 1.5rem !important;
+     }
+   }
+   
+   @media (min-width: 1025px) {
+     .search-results-wrapper {
+       grid-template-columns: repeat(4, 1fr) !important;
+       gap: 2rem !important;
+     }
+   }
+   
+   @media (min-width: 1441px) {
+     .search-results-wrapper {
+       grid-template-columns: repeat(5, 1fr) !important;
+       gap: 2rem !important;
+     }
+   }
+   
+   /* Fallback for grid support */
+   @supports not (display: grid) {
+     .search-results-wrapper {
+       display: flex !important;
+       flex-wrap: wrap !important;
+       gap: 1rem !important;
+     }
+     
+     .search-result-item {
+       flex: 1 1 300px !important;
+       max-width: calc(50% - 0.5rem) !important;
+     }
+   }
+   
+   /* Enhanced pagination reliability */
+   .pagination {
+     display: flex !important;
+     justify-content: center !important;
+     align-items: center !important;
+     flex-wrap: wrap !important;
+     gap: 8px !important;
+     padding: 10px !important;
+     box-sizing: border-box !important;
+     margin-top: 1rem !important;
+   }
+   
+   .pagination-button {
+     min-width: 40px !important;
+     height: 40px !important;
+     display: flex !important;
+     align-items: center !important;
+     justify-content: center !important;
+     border: 1px solid #ddd !important;
+     border-radius: 4px !important;
+     background: white !important;
+     cursor: pointer !important;
+     transition: all 0.2s ease !important;
+     font-size: 14px !important;
+     line-height: 1 !important;
+     text-decoration: none !important;
+   }
+   
+   .pagination-button:hover {
+     background: #f5f5f5 !important;
+     border-color: #0073e6 !important;
+   }
+   
+   .pagination-button.current-page {
+     background: #0073e6 !important;
+     color: white !important;
+     border-color: #0073e6 !important;
+     font-weight: bold !important;
+   }
+   
+   /* Mobile pagination optimization */
+   @media (max-width: 480px) {
+     .pagination {
+       gap: 4px !important;
+       padding: 5px !important;
+     }
+     
+     .pagination-button {
+       min-width: 36px !important;
+       height: 36px !important;
+       font-size: 12px !important;
+       padding: 6px 8px !important;
      }
    }
 
@@ -1166,22 +1349,50 @@ document.addEventListener('click', (event) => {
  }
 });
 
-// Handle window resize for responsive grid
+// Enhanced window resize handler for responsive grid reliability
 let resizeTimeout;
+let lastWindowWidth = window.innerWidth;
+
 window.addEventListener('resize', () => {
- clearTimeout(resizeTimeout);
- resizeTimeout = setTimeout(() => {
-   // Re-render results with new responsive grid if they exist
-   const existingResults = document.querySelector('.combined-search-results');
-   if (existingResults && resultsContainer.children.length > 0) {
-     console.log('Window resized, updating grid layout...');
-     // Trigger a re-render with current results
-     const currentQuery = input?.value || new URLSearchParams(window.location.search).get('q');
-     if (currentQuery) {
-       performSearch();
-     }
-   }
- }, 250); // Debounce resize events
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    const currentWidth = window.innerWidth;
+    const widthDifference = Math.abs(currentWidth - lastWindowWidth);
+    
+    // Only update if width change is significant (prevents unnecessary updates)
+    if (widthDifference > 50) {
+      console.log(`Window resized from ${lastWindowWidth}px to ${currentWidth}px, updating grid layout...`);
+      lastWindowWidth = currentWidth;
+      
+      // Re-render results with new responsive grid if they exist
+      const existingResults = document.querySelector('.combined-search-results');
+      if (existingResults && resultsContainer.children.length > 0) {
+        // Force a reflow to ensure proper grid layout
+        existingResults.style.display = 'none';
+        existingResults.offsetHeight; // Force reflow
+        existingResults.style.display = 'grid';
+        
+        // Update grid columns based on new width
+        const responsiveGridColumns = getResponsiveGridColumns();
+        existingResults.style.gridTemplateColumns = `repeat(${responsiveGridColumns}, 1fr)`;
+        
+        console.log(`Grid updated to ${responsiveGridColumns} columns`);
+      }
+    }
+  }, 300); // Increased debounce for better performance
+});
+
+// Add orientation change handler for mobile devices
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => {
+    console.log('Orientation changed, updating grid layout...');
+    const existingResults = document.querySelector('.combined-search-results');
+    if (existingResults) {
+      const responsiveGridColumns = getResponsiveGridColumns();
+      existingResults.style.gridTemplateColumns = `repeat(${responsiveGridColumns}, 1fr)`;
+      console.log(`Grid updated to ${responsiveGridColumns} columns after orientation change`);
+    }
+  }, 100); // Small delay to ensure orientation change is complete
 });
 
 // ===== ADD OPTIMIZED INPUT EVENT LISTENER =====
