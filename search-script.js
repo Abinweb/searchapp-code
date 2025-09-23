@@ -140,8 +140,85 @@ function fontWeightFromClass(className) {
   }
 }
 
-// Ultra-fast rendering with FIXED pagination
-function renderResultsFast(results, title, displayMode, maxItems, gridColumns = 3, paginationType = "None", container, currentPage = 1, isPageResult = true, styles = {}, selectedFieldsDisplay = []) {
+// Enhanced content snippet extraction with keyword highlighting
+function extractContentSnippet(content, searchQuery, maxLength = 150) {
+  if (!content || !searchQuery) return '';
+  
+  // Strip HTML tags for better text extraction
+  const stripHtml = (html) => {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
+  };
+  
+  const cleanContent = stripHtml(content);
+  const query = searchQuery.toLowerCase();
+  const contentLower = cleanContent.toLowerCase();
+  const queryIndex = contentLower.indexOf(query);
+  
+  if (queryIndex === -1) {
+    return cleanContent.slice(0, maxLength) + (cleanContent.length > maxLength ? '...' : '');
+  }
+  
+  // Extract snippet around the keyword
+  const start = Math.max(0, queryIndex - 50);
+  const end = Math.min(cleanContent.length, queryIndex + query.length + 50);
+  let snippet = cleanContent.slice(start, end);
+  
+  // Add ellipsis if we're not at the beginning/end
+  if (start > 0) snippet = '...' + snippet;
+  if (end < cleanContent.length) snippet = snippet + '...';
+  
+  return snippet;
+}
+
+// Highlight search keywords in content
+function highlightKeywords(text, searchQuery) {
+  if (!text || !searchQuery) return text;
+  
+  const query = searchQuery.trim();
+  if (!query) return text;
+  
+  // Split query into individual words for better matching
+  const words = query.split(/\s+/).filter(word => word.length > 2);
+  
+  let highlightedText = text;
+  words.forEach(word => {
+    const regex = new RegExp(`(${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    highlightedText = highlightedText.replace(regex, '<mark>$1</mark>');
+  });
+  
+  return highlightedText;
+}
+
+// Get primary image from item
+function getPrimaryImage(item) {
+  // Check for images field first
+  if (item.images) {
+    if (Array.isArray(item.images) && item.images.length > 0) {
+      return item.images[0];
+    } else if (item.images.url) {
+      return item.images;
+    }
+  }
+  
+  // Check for featured image or similar
+  if (item.featuredImage) {
+    return item.featuredImage;
+  }
+  
+  // Check for any field that might contain an image URL
+  for (const [key, value] of Object.entries(item)) {
+    if (typeof value === 'object' && value !== null && value.url) {
+      return value;
+    }
+  }
+  
+  return null;
+}
+
+// Ultra-fast rendering with FIXED pagination and optimized content display
+function renderResultsFast(results, title, displayMode, maxItems, gridColumns = 3, paginationType = "None", container, currentPage = 1, isPageResult = true, styles = {}, selectedFieldsDisplay = [], searchQuery = '') {
   if (!Array.isArray(results) || results.length === 0) return "";
   
   const totalPages = maxItems ? Math.ceil(results.length / maxItems) : 1;
@@ -189,88 +266,108 @@ function renderResultsFast(results, title, displayMode, maxItems, gridColumns = 
   } = styles;
   
   const itemsHtml = pagedResults.map(item => {
-    // Debug: Log item structure to identify backend issues
-    console.log('🔍 Rendering item:', item);
-    
-    const titleText = item.name || item.title || "Untitled";
+    // Better title extraction with more field options
+    const titleText = item.name || item.title || item.heading || item.headline || item.label || "Untitled";
     const detailUrl = item._type === 'page' 
       ? (item.publishedPath || item.slug || "#")
       : (item.detailUrl || "#");
-    const matchedText = item.matchedText?.slice(0, 200) || "";
     
-    // Use selectedFieldsDisplay if provided, otherwise show all fields
-    const fieldsToShow = selectedFieldsDisplay.length > 0 ? selectedFieldsDisplay : Object.keys(item);
+    // Get the best content snippet for display
+    let contentSnippet = '';
+    let contentSource = '';
     
-    const fieldsHtml = Object.entries(item)
-      .filter(([key]) => {
-        // Always exclude these fields
-        const excludedFields = ['name', 'title', 'detailUrl', '_type', 'matchedText', 'slug', 'publishedPath'];
-        if (excludedFields.includes(key)) return false;
-        
-        // If selectedFieldsDisplay is specified, only show those fields
-        if (selectedFieldsDisplay.length > 0) {
-          return selectedFieldsDisplay.includes(key);
+    // Debug: Log the item structure to understand the data
+    console.log('🔍 Item data structure:', Object.keys(item));
+    console.log('🔍 Item content fields:', Object.entries(item).filter(([key, value]) => 
+      typeof value === 'string' && value.length > 10
+    ));
+    
+    // Priority order for content extraction
+    const contentFields = ['content', 'description', 'excerpt', 'summary', 'body', 'text', 'html'];
+    
+    for (const field of contentFields) {
+      if (item[field] && typeof item[field] === 'string' && item[field].trim()) {
+        contentSnippet = extractContentSnippet(item[field], searchQuery, 120);
+        contentSource = field;
+        console.log(`📝 Using content from field: ${field}`);
+        break;
+      }
+    }
+    
+    // If no content found, use matchedText as fallback
+    if (!contentSnippet && item.matchedText) {
+      contentSnippet = extractContentSnippet(item.matchedText, searchQuery, 120);
+      contentSource = 'matchedText';
+      console.log('📝 Using matchedText as fallback');
+    }
+    
+    // If still no content, try to find any text field with substantial content
+    if (!contentSnippet) {
+      for (const [key, value] of Object.entries(item)) {
+        if (typeof value === 'string' && value.length > 20 && !['name', 'title', 'slug', 'url', 'id'].includes(key)) {
+          contentSnippet = extractContentSnippet(value, searchQuery, 120);
+          contentSource = key;
+          console.log(`📝 Using content from field: ${key}`);
+          break;
         }
-        
-        return true;
-      })
-      .slice(0, 7) // Show more fields
-      .map(([key, value]) => {
-        // Handle different data types properly
-        let displayValue = '';
-        
-        if (typeof value === 'string') {
-          if (value.match(/^\d{4}-\d{2}-\d{2}T/)) {
-            displayValue = new Date(value).toLocaleString();
-          } else {
-            displayValue = value;
-          }
-        } else if (typeof value === 'object' && value !== null) {
-          // Handle images specially
-          if (key === 'images') {
-            if (Array.isArray(value)) {
-              // Handle array of images
-              return value.slice(0, 2).map(img => 
-                `<img src="${img.url || img}" alt="${img.alt || ''}" style="max-width: 100%; height: auto; border-radius: 4px; margin: 0.5rem 0; display: block; text-align: ${bodyAlignment};">`
-              ).join('');
-            } else if (value.url) {
-              // Handle single image object
-              return `<img src="${value.url}" alt="${value.alt || ''}" style="max-width: 100%; height: auto; border-radius: 4px; margin: 0.5rem 0; display: block; text-align: ${bodyAlignment};">`;
-            }
-          }
-          // Handle objects by extracting meaningful values
-          if (Array.isArray(value)) {
-            displayValue = value.join(', ');
-          } else if (value.text || value.content || value.description) {
-            displayValue = value.text || value.content || value.description;
-          } else if (value.url) {
-            // If it's an image object with URL, show the image
-            return `<img src="${value.url}" alt="${value.alt || ''}" style="max-width: 100%; height: auto; border-radius: 4px; margin: 0.5rem 0; display: block; text-align: ${bodyAlignment};">`;
-          } else {
-            displayValue = JSON.stringify(value, null, 2).slice(0, 100) + '...';
-          }
-        } else if (typeof value === 'number' || typeof value === 'boolean') {
-          displayValue = String(value);
-        } else {
-          displayValue = String(value || '');
-        }
-        
-        // Only show non-empty values - NO LABELS
-        if (displayValue && displayValue.trim() && displayValue !== 'null' && displayValue !== 'undefined') {
-          return `<p style="
-            color: ${otherFieldsColor};
-            font-size: ${otherFieldsFontSize};
-            font-family: '${otherFieldsFontFamily}', sans-serif;
-            font-weight: ${fontWeightFromClass(otherFieldsFontWeight)};
-            text-align: ${bodyAlignment};
-            margin: 0.25rem 0;
-            line-height: 1.4;
-          ">${displayValue}</p>`;
-        }
-        return '';
-      })
-      .filter(html => html) // Remove empty entries
-      .join("");
+      }
+    }
+    
+    // Final fallback - show a generic message with search query
+    if (!contentSnippet && searchQuery) {
+      contentSnippet = `Found results for "${searchQuery}"`;
+      contentSource = 'fallback';
+      console.log('📝 Using fallback content');
+    }
+    
+    // Debug logging
+    console.log('🔍 Processing item:', {
+      title: titleText,
+      type: item._type,
+      url: detailUrl,
+      contentSnippet: contentSnippet,
+      contentSource: contentSource,
+      searchQuery: searchQuery
+    });
+    
+    // Highlight keywords in title and content
+    const highlightedTitle = highlightKeywords(titleText, searchQuery);
+    const highlightedContent = highlightKeywords(contentSnippet, searchQuery);
+    
+    // Get primary image
+    const primaryImage = getPrimaryImage(item);
+    
+    // Build minimal content display
+    let contentHtml = '';
+    
+    if (highlightedContent) {
+      contentHtml += `<p style="
+        color: ${otherFieldsColor};
+        font-size: ${otherFieldsFontSize};
+        font-family: '${otherFieldsFontFamily}', sans-serif;
+        font-weight: ${fontWeightFromClass(otherFieldsFontWeight)};
+        text-align: ${bodyAlignment};
+        margin: 0.5rem 0;
+        line-height: 1.4;
+        word-wrap: break-word;
+      ">${highlightedContent}</p>`;
+    }
+    
+    // Add primary image if available
+    if (primaryImage) {
+      const imageUrl = primaryImage.url || primaryImage;
+      const imageAlt = primaryImage.alt || titleText;
+      contentHtml += `<img src="${imageUrl}" alt="${imageAlt}" style="
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+        margin: 0.5rem 0;
+        display: block;
+        object-fit: cover;
+        max-height: 120px;
+        width: 100%;
+      ">`;
+    }
     
     if (displayMode === "Grid") {
       return `
@@ -302,32 +399,29 @@ function renderResultsFast(results, title, displayMode, maxItems, gridColumns = 
                 line-height: 1.3;
                 margin-top: 0;
               ">
-                ${titleText}
+                ${highlightedTitle}
               </h4>
-              ${matchedText ? `
-                <p style="
-                  color: ${otherFieldsColor};
-                  font-size: ${otherFieldsFontSize};
-                  font-family: '${otherFieldsFontFamily}', sans-serif;
-                  font-weight: ${fontWeightFromClass(otherFieldsFontWeight)};
-                  text-align: ${bodyAlignment};
-                  flex-grow: 1;
-                  margin: 0;
-                  line-height: 1.4;
-                  word-wrap: break-word;
-                ">${matchedText}...</p>
-              ` : `
-                <div style="flex-grow: 1; word-wrap: break-word;">
-                  ${fieldsHtml}
-                </div>
-              `}
+              <div style="flex-grow: 1; word-wrap: break-word;">
+                ${contentHtml}
+              </div>
             </div>
           </div>
         </a>
       `;
     } else {
       return `
-        <div class="search-result-item" style="margin-bottom: 1rem; padding-left: 1rem;">
+        <div class="search-result-item list-item" style="
+          margin-bottom: 1rem;
+          padding: 1rem;
+          background: ${backgroundColor};
+          border: 1px solid #ddd;
+          border-radius: ${borderRadius};
+          ${boxShadow ? 'box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);' : ''}
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+          word-wrap: break-word;
+        ">
           <a href="${detailUrl}" target="_blank" style="
             font-size: ${titleFontSize};
             font-family: '${titleFontFamily}', sans-serif;
@@ -335,18 +429,18 @@ function renderResultsFast(results, title, displayMode, maxItems, gridColumns = 
             color: ${titleColor};
             text-align: ${headingAlignment};
             text-decoration: underline;
+            display: block;
+            margin-bottom: 0.5rem;
+            word-wrap: break-word;
           ">
-            ${titleText}
+            ${highlightedTitle}
           </a>
-          ${matchedText ? `
-            <p style="
-              color: ${otherFieldsColor};
-              font-size: ${otherFieldsFontSize};
-              font-family: '${otherFieldsFontFamily}', sans-serif;
-              font-weight: ${fontWeightFromClass(otherFieldsFontWeight)};
-              text-align: ${bodyAlignment};
-            ">${matchedText}...</p>
-          ` : fieldsHtml}
+          <div style="
+            margin-top: 0.5rem;
+            word-wrap: break-word;
+          ">
+            ${contentHtml}
+          </div>
         </div>
       `;
     }
@@ -405,9 +499,9 @@ function renderResultsFast(results, title, displayMode, maxItems, gridColumns = 
   
   const sectionHtml = `
     <section style="margin-top: 2rem;">
-      <div class="search-results-wrapper" style="
+      <div class="search-results-wrapper ${displayMode === 'List' ? 'list-mode' : ''}" style="
         display: ${displayMode === 'Grid' ? 'grid' : 'block'};
-        grid-template-columns: repeat(${responsiveGridColumns}, 1fr);
+        grid-template-columns: ${displayMode === 'Grid' ? `repeat(${responsiveGridColumns}, 1fr)` : 'none'};
         gap: 1rem;
         width: 100%;
         max-width: 100%;
@@ -430,7 +524,7 @@ function renderResultsFast(results, title, displayMode, maxItems, gridColumns = 
         btn.addEventListener('click', () => {
           const page = parseInt(btn.getAttribute('data-page'));
           console.log(`Pagination clicked: page ${page}`);
-          renderResultsFast(results, title, displayMode, maxItems, gridColumns, paginationType, container, page, isPageResult, styles, selectedFieldsDisplay);
+          renderResultsFast(results, title, displayMode, maxItems, gridColumns, paginationType, container, page, isPageResult, styles, selectedFieldsDisplay, searchQuery);
         });
       });
     }
@@ -440,7 +534,7 @@ function renderResultsFast(results, title, displayMode, maxItems, gridColumns = 
       if (loadBtn) {
         loadBtn.addEventListener('click', () => {
           console.log('Load more clicked');
-          renderResultsFast(results, title, displayMode, endIndex + maxItems, gridColumns, paginationType, container, 1, isPageResult, styles, selectedFieldsDisplay);
+          renderResultsFast(results, title, displayMode, endIndex + maxItems, gridColumns, paginationType, container, 1, isPageResult, styles, selectedFieldsDisplay, searchQuery);
         });
       }
     }
@@ -657,6 +751,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       overflow: hidden;
     }
     
+    .search-results-wrapper.list-mode {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+    }
+    
     @media (max-width: 479px) {
       .search-results-wrapper {
         grid-template-columns: 1fr;
@@ -755,6 +855,59 @@ document.addEventListener("DOMContentLoaded", async function () {
       width: 100%;
       object-fit: cover;
     }
+    
+    mark {
+      background-color: #ffeb3b;
+      color: #000;
+      padding: 0.1em 0.2em;
+      border-radius: 2px;
+      font-weight: bold;
+    }
+    
+    .list-item {
+      display: block;
+      width: 100%;
+      margin-bottom: 1rem;
+      padding: 1rem;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      box-sizing: border-box;
+      word-wrap: break-word;
+    }
+    
+    .list-item:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transform: translateY(-1px);
+      transition: all 0.2s ease;
+    }
+    
+    .list-item a {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      margin-bottom: 0.5rem;
+    }
+    
+    .list-item a:hover {
+      text-decoration: underline;
+    }
+    
+    @media (max-width: 768px) {
+      .list-item {
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .list-item {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+        border-radius: 4px;
+      }
+    }
   `;
   document.head.appendChild(style);
 
@@ -846,6 +999,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     if (!query) return;
     
+    console.log('🔍 Search query for highlighting:', query);
+    
     const cachedResults = getCachedResults(query, selectedOption);
     if (cachedResults) {
       console.log('⚡ Rendering cached results instantly');
@@ -876,7 +1031,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const combinedResultsDiv = document.createElement("div");
       combinedResultsDiv.classList.add("combined-search-results");
       resultsContainer.appendChild(combinedResultsDiv);
-      renderResultsFast(cachedResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles, selectedFieldsDisplay);
+      renderResultsFast(cachedResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles, selectedFieldsDisplay, query);
       return;
     }
     
@@ -929,7 +1084,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       combinedResultsDiv.classList.add("combined-search-results");
       resultsContainer.appendChild(combinedResultsDiv);
       
-      renderResultsFast(allResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles, selectedFieldsDisplay);
+      renderResultsFast(allResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles, selectedFieldsDisplay, query);
       hideSpinner();
       
     } catch (error) {
@@ -1102,7 +1257,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             const combinedResultsDiv = document.createElement("div");
             combinedResultsDiv.classList.add("combined-search-results");
             resultsContainer.appendChild(combinedResultsDiv);
-            renderResultsFast(cachedResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles, selectedFieldsDisplay);
+            renderResultsFast(cachedResults, "Search Results", displayMode, maxItems, gridColumns, paginationType, combinedResultsDiv, 1, false, styles, selectedFieldsDisplay, query);
           }
           
           // Add query parameter to URL
